@@ -41,47 +41,45 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = async (email: string, password: string) => {
-    try {
-      // Here you would typically make an API call to your backend
-      // For now, we'll simulate a successful login
-      const mockUser: UserProfile = {
-        id: '1',
-        name: 'John Doe',
-        email,
-        streak: 5,
-        totalStudyTime: 120,
-        lastStudyDate: new Date().toISOString(),
-        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=John'
-      };
-      setUser(mockUser);
-      localStorage.setItem('user', JSON.stringify(mockUser));
-    } catch (error) {
-      console.error('Login failed:', error);
-      throw error;
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.message || 'Login failed.');
     }
+
+    localStorage.setItem('token', data.token);
+    const profile: UserProfile = {
+      id: data.user.id,
+      name: data.user.name,
+      email: data.user.email,
+      streak: data.user.streak ?? 0,
+      totalStudyTime: 0,
+      lastStudyDate: new Date().toISOString(),
+      avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.user.name}`
+    };
+    setUser(profile);
+    localStorage.setItem('user', JSON.stringify(profile));
   };
 
   const signup = async (name: string, email: string, password: string, phoneNumber?: string) => {
-    try {
-      const mockUser: UserProfile = {
-        id: '1',
-        name,
-        email,
-        phoneNumber,
-        notificationPreferences: {
-          enabled: false
-        },
-        streak: 0,
-        totalStudyTime: 0,
-        lastStudyDate: new Date().toISOString(),
-        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}`
-      };
-      setUser(mockUser);
-      localStorage.setItem('user', JSON.stringify(mockUser));
-    } catch (error) {
-      console.error('Signup failed:', error);
-      throw error;
+    const response = await fetch('/api/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, password, phoneNumber }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.message || 'Signup failed.');
     }
+
+    // After signup, auto-login
+    await login(email, password);
   };
 
   const logout = () => {
