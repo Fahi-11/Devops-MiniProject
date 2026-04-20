@@ -1,8 +1,8 @@
-# ── Deployment ────────────────────────────────────────────────────────────────
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: schemind-backend
+  namespace: schemind
   labels:
     app: schemind-backend
 spec:
@@ -18,11 +18,14 @@ spec:
       containers:
         - name: schemind-backend
           image: prajitpranavk/schemind-backend:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 5001
           env:
             - name: PORT
               value: "5001"
+            - name: NODE_ENV
+              value: "production"
             - name: MONGO_URI
               valueFrom:
                 secretKeyRef:
@@ -35,6 +38,18 @@ spec:
                   key: JWT_SECRET
             - name: FRONTEND_URL
               value: "http://NODE_IP:30080"
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 5001
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 5001
+            initialDelaySeconds: 10
+            periodSeconds: 10
           resources:
             requests:
               memory: "128Mi"
@@ -44,11 +59,11 @@ spec:
               cpu: "500m"
 
 ---
-# ── Service (NodePort) ────────────────────────────────────────────────────────
 apiVersion: v1
 kind: Service
 metadata:
   name: schemind-backend-service
+  namespace: schemind
 spec:
   type: NodePort
   selector:

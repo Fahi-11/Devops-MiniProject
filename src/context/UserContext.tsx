@@ -1,5 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
+// In local dev: VITE_API_URL is empty → Vite proxy handles /api/* → localhost:5001
+// In production K8s: VITE_API_URL = http://<NODE_IP>:30081
+const API_BASE = import.meta.env.VITE_API_URL || '';
+
 type UserProfile = {
   id: string;
   name: string;
@@ -41,7 +45,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = async (email: string, password: string) => {
-    const response = await fetch('/api/auth/login', {
+    const response = await fetch(`${API_BASE}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
@@ -67,7 +71,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signup = async (name: string, email: string, password: string, phoneNumber?: string) => {
-    const response = await fetch('/api/auth/signup', {
+    const response = await fetch(`${API_BASE}/api/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, email, password, phoneNumber }),

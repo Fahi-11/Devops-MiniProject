@@ -1,8 +1,8 @@
-# ── Deployment ────────────────────────────────────────────────────────────────
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: schemind-frontend
+  namespace: schemind
   labels:
     app: schemind-frontend
 spec:
@@ -18,8 +18,21 @@ spec:
       containers:
         - name: schemind-frontend
           image: prajitpranavk/schemind-frontend:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 80
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
           resources:
             requests:
               memory: "64Mi"
@@ -29,11 +42,11 @@ spec:
               cpu: "500m"
 
 ---
-# ── Service (NodePort) ────────────────────────────────────────────────────────
 apiVersion: v1
 kind: Service
 metadata:
   name: schemind-frontend-service
+  namespace: schemind
 spec:
   type: NodePort
   selector:
