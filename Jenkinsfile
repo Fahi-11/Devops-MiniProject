@@ -2,30 +2,26 @@ pipeline {
     agent any
 
     environment {
-        DOCKERHUB_USER = 'faheem313'
-        FRONTEND_IMAGE = "${DOCKERHUB_USER}/schemind-frontend"
-        BACKEND_IMAGE  = "${DOCKERHUB_USER}/schemind-backend"
-        IMAGE_TAG      = "build-${BUILD_NUMBER}"
+        DOCKERHUB_USER  = 'faheem313'
+        FRONTEND_IMAGE  = "${DOCKERHUB_USER}/schemind-frontend"
+        BACKEND_IMAGE   = "${DOCKERHUB_USER}/schemind-backend"
+        IMAGE_TAG       = "build-${BUILD_NUMBER}"
+        // K8s node IP — set as a Jenkins env var or pass via pipeline param
+        K8S_NODE_IP     = "${env.K8S_NODE_IP ?: 'localhost'}"
+        KUBECONFIG      = credentials('kubeconfig')
     }
 
     stages {
-        stage('Checkout Source') {
+
+        // ── 1. Clone ─────────────────────────────────────────────────────────
+        stage('Clone Repository') {
             steps {
                 echo '📥 Cloning repository...'
                 checkout scm
             }
         }
 
-        stage('Docker Diagnostics') {
-            steps {
-                echo '🔎 Checking Docker access...'
-                sh 'whoami'
-                sh 'groups || true'
-                sh 'docker version'
-                sh 'docker info || true'
-            }
-        }
-
+        // ── 2. Test Backend ──────────────────────────────────────────────────
         stage('Test Backend') {
             steps {
                 echo '🧪 Running backend checks...'
@@ -36,6 +32,7 @@ pipeline {
             }
         }
 
+        // ── 3. Build Docker Images ───────────────────────────────────────────
         stage('Build Backend Docker Image') {
             steps {
                 echo '🔨 Building Backend Docker image...'
@@ -46,16 +43,17 @@ pipeline {
         stage('Build Frontend Docker Image') {
             steps {
                 echo '🔨 Building Frontend Docker image...'
-                sh '''
-                    docker build \
-                        --build-arg VITE_API_URL=http://localhost:30081 \
-                        -t ${FRONTEND_IMAGE}:${IMAGE_TAG} \
-                        -t ${FRONTEND_IMAGE}:latest \
+                sh """
+                    docker build \\
+                        --build-arg VITE_API_URL=http://${K8S_NODE_IP}:30081 \\
+                        -t ${FRONTEND_IMAGE}:${IMAGE_TAG} \\
+                        -t ${FRONTEND_IMAGE}:latest \\
                         -f Dockerfile.frontend .
-                '''
+                """
             }
         }
 
+        // ── 4. Push to Docker Hub ────────────────────────────────────────────
         stage('Docker Login & Push') {
             steps {
                 echo '🔐 Logging in and pushing to Docker Hub...'
@@ -64,7 +62,7 @@ pipeline {
                     usernameVariable: 'DOCKER_USER',
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
-                    sh 'echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin'
+                    sh "echo ${DOCKER_PASS} | docker login -u ${DOCKER_USER} --password-stdin"
                     sh "docker push ${BACKEND_IMAGE}:${IMAGE_TAG}"
                     sh "docker push ${BACKEND_IMAGE}:latest"
                     sh "docker push ${FRONTEND_IMAGE}:${IMAGE_TAG}"
@@ -73,23 +71,81 @@ pipeline {
             }
         }
 
+        // ── 5. Deploy App to Kubernetes ──────────────────────────────────────
+        stage('Deploy to Kubernetes') {
+            steps {
+                echo '☸️  Deploying application to Kubernetes...'
+                sh """
+                    # Create namespace if not exists
+                    kubectl apply -f k8s/namespace.yaml
+
+                    # Apply secrets (must be pre-created or managed separately)
+                    # kubectl apply -f k8s/secret.yaml
+
+                    # Deploy backend & frontend
+                    kubectl apply -f k8s/backend.yaml
+                    kubectl apply -f k8s/frontend.yaml
+
+                    # Force rolling update with the new image tag
+                    kubectl set image deployment/schemind-backend \\
+                        schemind-backend=${BACKEND_IMAGE}:${IMAGE_TAG} \\
+                        -n schemind
+
+                    kubectl set image deployment/schemind-frontend \\
+                        schemind-frontend=${FRONTEND_IMAGE}:${IMAGE_TAG} \\
+                        -n schemind
+
+                    # Wait for rollout to complete
+                    kubectl rollout status deployment/schemind-backend -n schemind --timeout=120s
+                    kubectl rollout status deployment/schemind-frontend -n schemind --timeout=120s
+                """
+            }
+        }
+
+        // ── 6. Deploy Prometheus + Grafana ───────────────────────────────────
+        stage('Deploy Monitoring Stack') {
+            steps {
+                echo '📊 Deploying Prometheus + Grafana monitoring...'
+                sh """
+                    kubectl apply -f k8s/prometheus/monitoring-namespace.yaml
+                    kubectl apply -f k8s/prometheus/rbac.yaml
+                    kubectl apply -f k8s/prometheus/prometheus-config.yaml
+                    kubectl apply -f k8s/prometheus/prometheus-deployment.yaml
+                    kubectl apply -f k8s/prometheus/grafana-deployment.yaml
+
+                    kubectl rollout status deployment/prometheus -n monitoring --timeout=120s
+                    kubectl rollout status deployment/grafana    -n monitoring --timeout=120s
+                """
+            }
+        }
+
+        // ── 7. Cleanup Local Images ──────────────────────────────────────────
         stage('Cleanup Local Images') {
             steps {
                 echo '🧹 Cleaning up local Docker images...'
                 sh "docker rmi ${FRONTEND_IMAGE}:${IMAGE_TAG} || true"
-                sh "docker rmi ${BACKEND_IMAGE}:${IMAGE_TAG} || true"
+                sh "docker rmi ${BACKEND_IMAGE}:${IMAGE_TAG}  || true"
             }
         }
+
     }
 
     post {
         success {
             echo '✅ Pipeline completed successfully!'
-            echo "📦 Frontend: https://hub.docker.com/r/${FRONTEND_IMAGE}"
-            echo "📦 Backend:  https://hub.docker.com/r/${BACKEND_IMAGE}"
+            echo ''
+            echo '📦 Docker Hub Images:'
+            echo "   Frontend : https://hub.docker.com/r/${FRONTEND_IMAGE}"
+            echo "   Backend  : https://hub.docker.com/r/${BACKEND_IMAGE}"
+            echo ''
+            echo '🌐 Application URLs (replace NODE_IP with your cluster node IP):'
+            echo "   Frontend  : http://${K8S_NODE_IP}:30080"
+            echo "   Backend   : http://${K8S_NODE_IP}:30081/api/health"
+            echo "   Prometheus: http://${K8S_NODE_IP}:30090"
+            echo "   Grafana   : http://${K8S_NODE_IP}:30091  (admin / admin123)"
         }
         failure {
-            echo '❌ Pipeline failed. Check the logs above.'
+            echo '❌ Pipeline failed. Check the logs above for details.'
         }
         always {
             sh 'docker logout || true'

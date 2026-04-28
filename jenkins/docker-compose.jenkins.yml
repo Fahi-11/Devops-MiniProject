@@ -10,7 +10,6 @@ services:
       dockerfile: Dockerfile
     container_name: schemind-jenkins
     restart: unless-stopped
-    user: root
     ports:
       - "8082:8080"     # Jenkins UI
       - "50000:50000"   # Agent connections
