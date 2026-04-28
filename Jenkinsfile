@@ -7,8 +7,8 @@ pipeline {
         BACKEND_IMAGE   = "${DOCKERHUB_USER}/schemind-backend"
         IMAGE_TAG       = "build-${BUILD_NUMBER}"
         // K8s node IP — set as a Jenkins env var or pass via pipeline param
-        K8S_NODE_IP     = "${env.K8S_NODE_IP ?: 'localhost'}"
-        KUBECONFIG      = credentials('kubeconfig')
+        // K8S_NODE_IP     = "${env.K8S_NODE_IP ?: 'localhost'}"
+        // KUBECONFIG      = credentials('kubeconfig')
     }
 
     stages {
