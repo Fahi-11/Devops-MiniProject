@@ -5,7 +5,7 @@
 
 ---
 
-## 📋 Table of Contents
+## Table of Contents
 
 - [Architecture Overview](#architecture-overview)
 - [Tech Stack](#tech-stack)
@@ -15,7 +15,6 @@
 - [Docker — Manual Build & Run](#docker--manual-build--run)
 - [Jenkins CI/CD Pipeline](#jenkins-cicd-pipeline)
 - [Kubernetes Deployment](#kubernetes-deployment)
-- [Prometheus & Grafana Monitoring](#prometheus--grafana-monitoring)
 - [Service Ports Reference](#service-ports-reference)
 - [Environment Variables](#environment-variables)
 
@@ -36,18 +35,8 @@
      │ schemind-backend  │───────────▶│  Namespace: schemind │
      └──────────────────┘            │  ├─ frontend (Nginx)  │
                                      │  ├─ backend  (Node)   │
-                                     │  └─ secrets           │
-                                     │                      │
-                                     │  Namespace: monitoring│
-                                     │  ├─ Prometheus        │
-                                     │  └─ Grafana           │
-                                     └──────────────────────┘
-                                              │
-                                     ┌────────┴────────┐
-                                     │  /metrics        │
-                                     │  (prom-client)   │
-                                     └─────────────────┘
-```
+                                     │  └─ backend  (Node)   │
+                                     └─────
 
 ---
 
@@ -60,7 +49,6 @@
 | **Container**  | Docker (multi-stage builds) + Docker Compose |
 | **CI/CD**      | Jenkins (Declarative Pipeline)               |
 | **Orchestration** | Kubernetes (Deployments, Services, Secrets) |
-| **Monitoring** | Prometheus + Grafana + prom-client           |
 
 ---
 
@@ -68,41 +56,15 @@
 
 ```
 Devops/
+├── Dockerfile.frontend         # Multi-stage: Vite build → Nginx
+├── docker-compose.yml          # Local stack (Mongo + App)
+├── DOCKER_COMMANDS.md          # Manual Docker commands reference
+├── nginx.conf                  # SPA routing for Nginx
 ├── backend/
 │   ├── Dockerfile              # Backend container image
-│   ├── server.js               # Express API + /metrics endpoint
-│   ├── package.json            # Includes prom-client
+│   ├── server.js               # Express API
+│   ├── package.json
 │   └── .env.example            # Environment variable template
-│
-├── src/                        # React frontend source
-│   ├── App.tsx
-│   ├── pages/
-│   └── components/
-│
-├── k8s/                        # Kubernetes manifests
-│   ├── namespace.yaml          # schemind namespace
-│   ├── backend.yaml            # Backend Deployment + Service (NodePort 30081)
-│   ├── frontend.yaml           # Frontend Deployment + Service (NodePort 30080)
-│   ├── secret.yaml.example     # Template for secrets
-│   └── prometheus/             # Monitoring stack
-│       ├── monitoring-namespace.yaml
-│       ├── rbac.yaml           # ServiceAccount + ClusterRole
-│       ├── prometheus-config.yaml   # Scrape config + alert rules (K8s)
-│       ├── prometheus-deployment.yaml  # (NodePort 30090)
-│       └── grafana-deployment.yaml     # (NodePort 30091) + dashboard ConfigMap
-│
-├── prometheus/                 # Prometheus config for Docker Compose
-│   ├── prometheus-local.yml    # Scrape config (Docker Compose)
-│   └── alert-rules.yml        # Alerting rules (error rate, latency, memory, etc.)
-│
-├── grafana/                    # Grafana auto-provisioning (Docker Compose)
-│   ├── provisioning/
-│   │   ├── datasources/
-│   │   │   └── datasource.yml  # Auto-registers Prometheus datasource
-│   │   └── dashboards/
-│   │       └── dashboard.yml   # Dashboard provider config
-│   └── dashboards/
-│       └── schemind-overview.json  # Pre-built 15-panel monitoring dashboard
 │
 ├── jenkins/                    # Jenkins CI/CD setup
 │   ├── Dockerfile              # Jenkins image with Docker CLI + kubectl
@@ -111,11 +73,18 @@ Devops/
 │   ├── deploy-k8s.ps1          # K8s deployment helper script
 │   └── trigger-build.ps1       # Build trigger script
 │
-├── Dockerfile.frontend         # Multi-stage: Vite build → Nginx
-├── docker-compose.yml          # Full local stack (Mongo + App + Monitoring)
 ├── Jenkinsfile                 # 7-stage CI/CD pipeline
-├── nginx.conf                  # SPA routing for Nginx
-└── DOCKER_COMMANDS.md          # Manual Docker commands reference
+│
+├── k8s/                        # Kubernetes manifests
+│   ├── namespace.yaml          # schemind namespace
+│   ├── backend.yaml            # Backend Deployment + Service (NodePort 30081)
+│   ├── frontend.yaml           # Frontend Deployment + Service (NodePort 30080)
+│   └── secret.yaml.example     # Template for secrets
+│
+├── src/                        # React frontend source
+│   ├── App.tsx
+│   ├── pages/
+│   └── components/
 ```
 
 ---
@@ -139,6 +108,7 @@ The fastest way to run everything locally with a single command:
 
 ```bash
 # Start full stack: MongoDB + Backend + Frontend + Prometheus + Grafana
+docker cstack: MongoDB + Backend + Frontend
 docker compose up --build
 
 # Stop everything
@@ -155,12 +125,6 @@ docker compose down -v
 | Frontend   | http://localhost:8080       |
 | Backend    | http://localhost:5001       |
 | API Health | http://localhost:5001/api/health |
-| Metrics    | http://localhost:5001/metrics |
-| Prometheus | http://localhost:9090       |
-| Grafana    | http://localhost:3000       |
-
-> **Grafana login:** `admin` / `admin123`
-
 ---
 
 ## Docker — Manual Build & Run

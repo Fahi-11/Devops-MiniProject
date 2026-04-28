@@ -3,8 +3,6 @@
 # Access:
 #   Frontend   → http://localhost:8080
 #   Backend    → http://localhost:5001
-#   Prometheus → http://localhost:9090
-#   Grafana    → http://localhost:3000  (admin / admin123)
 
 services:
 
@@ -50,43 +48,5 @@ services:
     depends_on:
       - backend
 
-  # ── Prometheus ────────────────────────────────────────────────────────────
-  prometheus:
-    image: prom/prometheus:v2.51.0
-    container_name: schemind-prometheus
-    restart: unless-stopped
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./prometheus/prometheus-local.yml:/etc/prometheus/prometheus.yml
-      - ./prometheus/alert-rules.yml:/etc/prometheus/alert-rules.yml
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.path=/prometheus"
-      - "--storage.tsdb.retention.time=7d"
-      - "--web.enable-lifecycle"
-    depends_on:
-      - backend
-
-  # ── Grafana ───────────────────────────────────────────────────────────────
-  grafana:
-    image: grafana/grafana:10.4.0
-    container_name: schemind-grafana
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-    environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin123
-      - GF_USERS_ALLOW_SIGN_UP=false
-    volumes:
-      - grafana-data:/var/lib/grafana
-      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
-      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
-      - ./grafana/dashboards:/var/lib/grafana/dashboards
-    depends_on:
-      - prometheus
-
 volumes:
   mongo-data:
-  grafana-data:

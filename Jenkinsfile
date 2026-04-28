@@ -36,7 +36,7 @@ pipeline {
         stage('Build Backend Docker Image') {
             steps {
                 echo '🔨 Building Backend Docker image...'
-                sh "docker build -t ${BACKEND_IMAGE}:${IMAGE_TAG} -t ${BACKEND_IMAGE}:latest -f backend/Dockerfile ./backend"
+                sh "sudo docker build -t ${BACKEND_IMAGE}:${IMAGE_TAG} -t ${BACKEND_IMAGE}:latest -f backend/Dockerfile ./backend"
             }
         }
 
@@ -44,7 +44,7 @@ pipeline {
             steps {
                 echo '🔨 Building Frontend Docker image...'
                 sh """
-                    docker build \\
+                    sudo docker build \\
                         --build-arg VITE_API_URL=http://${K8S_NODE_IP}:30081 \\
                         -t ${FRONTEND_IMAGE}:${IMAGE_TAG} \\
                         -t ${FRONTEND_IMAGE}:latest \\
@@ -62,11 +62,11 @@ pipeline {
                     usernameVariable: 'DOCKER_USER',
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
-                    sh "echo ${DOCKER_PASS} | docker login -u ${DOCKER_USER} --password-stdin"
-                    sh "docker push ${BACKEND_IMAGE}:${IMAGE_TAG}"
-                    sh "docker push ${BACKEND_IMAGE}:latest"
-                    sh "docker push ${FRONTEND_IMAGE}:${IMAGE_TAG}"
-                    sh "docker push ${FRONTEND_IMAGE}:latest"
+                    sh "echo ${DOCKER_PASS} | sudo docker login -u ${DOCKER_USER} --password-stdin"
+                    sh "sudo docker push ${BACKEND_IMAGE}:${IMAGE_TAG}"
+                    sh "sudo docker push ${BACKEND_IMAGE}:latest"
+                    sh "sudo docker push ${FRONTEND_IMAGE}:${IMAGE_TAG}"
+                    sh "sudo docker push ${FRONTEND_IMAGE}:latest"
                 }
             }
         }
@@ -102,29 +102,12 @@ pipeline {
             }
         }
 
-        // ── 6. Deploy Prometheus + Grafana ───────────────────────────────────
-        stage('Deploy Monitoring Stack') {
-            steps {
-                echo '📊 Deploying Prometheus + Grafana monitoring...'
-                sh """
-                    kubectl apply -f k8s/prometheus/monitoring-namespace.yaml
-                    kubectl apply -f k8s/prometheus/rbac.yaml
-                    kubectl apply -f k8s/prometheus/prometheus-config.yaml
-                    kubectl apply -f k8s/prometheus/prometheus-deployment.yaml
-                    kubectl apply -f k8s/prometheus/grafana-deployment.yaml
-
-                    kubectl rollout status deployment/prometheus -n monitoring --timeout=120s
-                    kubectl rollout status deployment/grafana    -n monitoring --timeout=120s
-                """
-            }
-        }
-
-        // ── 7. Cleanup Local Images ──────────────────────────────────────────
+        // ── 6. Cleanup Local Images ──────────────────────────────────────────
         stage('Cleanup Local Images') {
             steps {
                 echo '🧹 Cleaning up local Docker images...'
-                sh "docker rmi ${FRONTEND_IMAGE}:${IMAGE_TAG} || true"
-                sh "docker rmi ${BACKEND_IMAGE}:${IMAGE_TAG}  || true"
+                sh "sudo docker rmi ${FRONTEND_IMAGE}:${IMAGE_TAG} || true"
+                sh "sudo docker rmi ${BACKEND_IMAGE}:${IMAGE_TAG}  || true"
             }
         }
 
@@ -141,14 +124,12 @@ pipeline {
             echo '🌐 Application URLs (replace NODE_IP with your cluster node IP):'
             echo "   Frontend  : http://${K8S_NODE_IP}:30080"
             echo "   Backend   : http://${K8S_NODE_IP}:30081/api/health"
-            echo "   Prometheus: http://${K8S_NODE_IP}:30090"
-            echo "   Grafana   : http://${K8S_NODE_IP}:30091  (admin / admin123)"
         }
         failure {
             echo '❌ Pipeline failed. Check the logs above for details.'
         }
         always {
-            sh 'docker logout || true'
+            sh 'sudo docker logout || true'
         }
     }
 }
