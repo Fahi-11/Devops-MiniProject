@@ -36,7 +36,7 @@ pipeline {
         stage('Build Backend Docker Image') {
             steps {
                 echo '🔨 Building Backend Docker image...'
-                sh "sudo docker build -t ${BACKEND_IMAGE}:${IMAGE_TAG} -t ${BACKEND_IMAGE}:latest -f backend/Dockerfile ./backend"
+                sh "docker build -t ${BACKEND_IMAGE}:${IMAGE_TAG} -t ${BACKEND_IMAGE}:latest -f backend/Dockerfile ./backend"
             }
         }
 
@@ -44,7 +44,7 @@ pipeline {
             steps {
                 echo '🔨 Building Frontend Docker image...'
                 sh """
-                    sudo docker build \\
+                    docker build \\
                         --build-arg VITE_API_URL=http://${K8S_NODE_IP}:30081 \\
                         -t ${FRONTEND_IMAGE}:${IMAGE_TAG} \\
                         -t ${FRONTEND_IMAGE}:latest \\
@@ -62,52 +62,52 @@ pipeline {
                     usernameVariable: 'DOCKER_USER',
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
-                    sh "echo ${DOCKER_PASS} | sudo docker login -u ${DOCKER_USER} --password-stdin"
-                    sh "sudo docker push ${BACKEND_IMAGE}:${IMAGE_TAG}"
-                    sh "sudo docker push ${BACKEND_IMAGE}:latest"
-                    sh "sudo docker push ${FRONTEND_IMAGE}:${IMAGE_TAG}"
-                    sh "sudo docker push ${FRONTEND_IMAGE}:latest"
+                    sh "echo ${DOCKER_PASS} | docker login -u ${DOCKER_USER} --password-stdin"
+                    sh "docker push ${BACKEND_IMAGE}:${IMAGE_TAG}"
+                    sh "docker push ${BACKEND_IMAGE}:latest"
+                    sh "docker push ${FRONTEND_IMAGE}:${IMAGE_TAG}"
+                    sh "docker push ${FRONTEND_IMAGE}:latest"
                 }
             }
         }
 
         // ── 5. Deploy App to Kubernetes ──────────────────────────────────────
-        stage('Deploy to Kubernetes') {
-            steps {
-                echo '☸️  Deploying application to Kubernetes...'
-                sh """
-                    # Create namespace if not exists
-                    kubectl apply -f k8s/namespace.yaml
+        // stage('Deploy to Kubernetes') {
+        //     steps {
+        //         echo '☸️  Deploying application to Kubernetes...'
+        //         sh """
+        //             # Create namespace if not exists
+        //             kubectl apply -f k8s/namespace.yaml
 
-                    # Apply secrets (must be pre-created or managed separately)
-                    # kubectl apply -f k8s/secret.yaml
+        //             # Apply secrets (must be pre-created or managed separately)
+        //             # kubectl apply -f k8s/secret.yaml
 
-                    # Deploy backend & frontend
-                    kubectl apply -f k8s/backend.yaml
-                    kubectl apply -f k8s/frontend.yaml
+        //             # Deploy backend & frontend
+        //             kubectl apply -f k8s/backend.yaml
+        //             kubectl apply -f k8s/frontend.yaml
 
-                    # Force rolling update with the new image tag
-                    kubectl set image deployment/schemind-backend \\
-                        schemind-backend=${BACKEND_IMAGE}:${IMAGE_TAG} \\
-                        -n schemind
+        //             # Force rolling update with the new image tag
+        //             kubectl set image deployment/schemind-backend \\
+        //                 schemind-backend=${BACKEND_IMAGE}:${IMAGE_TAG} \\
+        //                 -n schemind
 
-                    kubectl set image deployment/schemind-frontend \\
-                        schemind-frontend=${FRONTEND_IMAGE}:${IMAGE_TAG} \\
-                        -n schemind
+        //             kubectl set image deployment/schemind-frontend \\
+        //                 schemind-frontend=${FRONTEND_IMAGE}:${IMAGE_TAG} \\
+        //                 -n schemind
 
-                    # Wait for rollout to complete
-                    kubectl rollout status deployment/schemind-backend -n schemind --timeout=120s
-                    kubectl rollout status deployment/schemind-frontend -n schemind --timeout=120s
-                """
-            }
-        }
+        //             # Wait for rollout to complete
+        //             kubectl rollout status deployment/schemind-backend -n schemind --timeout=120s
+        //             kubectl rollout status deployment/schemind-frontend -n schemind --timeout=120s
+        //         """
+        //     }
+        // }
 
         // ── 6. Cleanup Local Images ──────────────────────────────────────────
         stage('Cleanup Local Images') {
             steps {
                 echo '🧹 Cleaning up local Docker images...'
-                sh "sudo docker rmi ${FRONTEND_IMAGE}:${IMAGE_TAG} || true"
-                sh "sudo docker rmi ${BACKEND_IMAGE}:${IMAGE_TAG}  || true"
+                sh "docker rmi ${FRONTEND_IMAGE}:${IMAGE_TAG} || true"
+                sh "docker rmi ${BACKEND_IMAGE}:${IMAGE_TAG}  || true"
             }
         }
 
@@ -129,7 +129,7 @@ pipeline {
             echo '❌ Pipeline failed. Check the logs above for details.'
         }
         always {
-            sh 'sudo docker logout || true'
+            sh 'docker logout || true'
         }
     }
 }
