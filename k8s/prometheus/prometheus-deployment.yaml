@@ -29,8 +29,6 @@ spec:
           volumeMounts:
             - name: prometheus-config-volume
               mountPath: /etc/prometheus/
-            - name: prometheus-storage-volume
-              mountPath: /prometheus
           resources:
             requests:
               memory: "256Mi"
@@ -55,8 +53,6 @@ spec:
           configMap:
             defaultMode: 420
             name: prometheus-config
-        - name: prometheus-storage-volume
-          emptyDir: {}
 
 ---
 apiVersion: v1

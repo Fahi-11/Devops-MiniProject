@@ -9,6 +9,9 @@ data:
       scrape_interval: 15s
       evaluation_interval: 15s
 
+    rule_files:
+      - "/etc/prometheus/alert-rules.yml"
+
     scrape_configs:
       # Scrape Prometheus itself
       - job_name: 'prometheus'
@@ -73,3 +76,61 @@ data:
           - source_labels: [__meta_kubernetes_pod_name]
             action: replace
             target_label: kubernetes_pod_name
+
+  alert-rules.yml: |
+    groups:
+      - name: schemind-backend-alerts
+        rules:
+          - alert: HighErrorRate
+            expr: sum(rate(http_requests_total{status_code=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) > 0.05
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "High HTTP error rate detected"
+              description: "More than 5% of requests are returning 5xx errors for the past 2 minutes."
+
+          - alert: HighResponseLatency
+            expr: histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[5m]))) > 1
+            for: 3m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High p95 response latency"
+              description: "95th percentile response time is above 1 second for the past 3 minutes."
+
+          - alert: HighMemoryUsage
+            expr: process_resident_memory_bytes > 512 * 1024 * 1024
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Backend memory usage above 512MB"
+              description: "Process RSS memory has exceeded 512MB for 5 minutes."
+
+          - alert: HighEventLoopLag
+            expr: nodejs_eventloop_lag_seconds > 0.5
+            for: 2m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Node.js event loop lag is high"
+              description: "Event loop lag exceeds 500ms."
+
+          - alert: BackendDown
+            expr: up{job="schemind-backend"} == 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Schemind backend is unreachable"
+              description: "Prometheus cannot scrape the backend /metrics endpoint."
+
+          - alert: TooManyActiveConnections
+            expr: active_connections > 100
+            for: 3m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High number of active connections"
+              description: "Active connections exceed 100 for over 3 minutes."

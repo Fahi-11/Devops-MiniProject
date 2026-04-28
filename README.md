@@ -87,16 +87,33 @@ Devops/
 │   └── prometheus/             # Monitoring stack
 │       ├── monitoring-namespace.yaml
 │       ├── rbac.yaml           # ServiceAccount + ClusterRole
-│       ├── prometheus-config.yaml
+│       ├── prometheus-config.yaml   # Scrape config + alert rules (K8s)
 │       ├── prometheus-deployment.yaml  # (NodePort 30090)
-│       └── grafana-deployment.yaml     # (NodePort 30091)
+│       └── grafana-deployment.yaml     # (NodePort 30091) + dashboard ConfigMap
 │
-├── prometheus/
-│   └── prometheus-local.yml    # Scrape config for Docker Compose
+├── prometheus/                 # Prometheus config for Docker Compose
+│   ├── prometheus-local.yml    # Scrape config (Docker Compose)
+│   └── alert-rules.yml        # Alerting rules (error rate, latency, memory, etc.)
+│
+├── grafana/                    # Grafana auto-provisioning (Docker Compose)
+│   ├── provisioning/
+│   │   ├── datasources/
+│   │   │   └── datasource.yml  # Auto-registers Prometheus datasource
+│   │   └── dashboards/
+│   │       └── dashboard.yml   # Dashboard provider config
+│   └── dashboards/
+│       └── schemind-overview.json  # Pre-built 15-panel monitoring dashboard
+│
+├── jenkins/                    # Jenkins CI/CD setup
+│   ├── Dockerfile              # Jenkins image with Docker CLI + kubectl
+│   ├── docker-compose.jenkins.yml  # Run Jenkins locally
+│   ├── job-config.xml          # Pipeline job configuration
+│   ├── deploy-k8s.ps1          # K8s deployment helper script
+│   └── trigger-build.ps1       # Build trigger script
 │
 ├── Dockerfile.frontend         # Multi-stage: Vite build → Nginx
 ├── docker-compose.yml          # Full local stack (Mongo + App + Monitoring)
-├── Jenkinsfile                 # Complete CI/CD pipeline
+├── Jenkinsfile                 # 7-stage CI/CD pipeline
 ├── nginx.conf                  # SPA routing for Nginx
 └── DOCKER_COMMANDS.md          # Manual Docker commands reference
 ```
@@ -332,9 +349,30 @@ kubectl get svc -n monitoring
 
 1. Open Grafana → Login with `admin` / `admin123`
 2. Prometheus datasource is **auto-provisioned** (no manual setup needed)
-3. Create a dashboard or import one:
+3. The **Schemind — Application Overview** dashboard is **auto-loaded** with 15 panels:
+   - Key Metrics: Request rate, avg response time, active connections, error rate
+   - HTTP Traffic: Request rate by status code, request rate by route
+   - Latency: p50/p90/p95/p99 duration percentiles
+   - Node.js Runtime: Memory usage, CPU usage, event loop lag
+   - Process Info: Uptime, open FDs, total requests, GC pauses
+4. You can also import community dashboards:
    - **Node.js App Dashboard:** Import ID `11159`
    - **Kubernetes Cluster:** Import ID `6417`
+
+### Prometheus Alerting Rules
+
+Six alerting rules are pre-configured (in `prometheus/alert-rules.yml`):
+
+| Alert                      | Severity   | Condition                                  | Duration |
+| -------------------------- | ---------- | ------------------------------------------ | -------- |
+| `HighErrorRate`            | 🔴 critical | 5xx error rate > 5%                        | 2 min    |
+| `BackendDown`              | 🔴 critical | Backend unreachable by Prometheus           | 1 min    |
+| `HighResponseLatency`      | 🟡 warning  | p95 latency > 1 second                     | 3 min    |
+| `HighMemoryUsage`          | 🟡 warning  | RSS memory > 512 MB                        | 5 min    |
+| `HighEventLoopLag`         | 🟡 warning  | Event loop lag > 500ms                     | 2 min    |
+| `TooManyActiveConnections` | 🟡 warning  | Active connections > 100                   | 3 min    |
+
+View active alerts at: `http://localhost:9090/alerts`
 
 ### Example Prometheus Queries (PromQL)
 

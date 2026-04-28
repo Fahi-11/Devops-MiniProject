@@ -140,3 +140,16 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 nul
+
+# ─── DevOps ────────────────────────────────────────────────────────────────────
+# Kubernetes secrets (never commit real secrets)
+k8s/secret.yaml
+*.secret.yaml
+
+# Jenkins
+jenkins/cookies.txt
+jenkins-data/
+
+# Docker volumes (managed by Docker, not Git)
+mongo-data/
+grafana-data/

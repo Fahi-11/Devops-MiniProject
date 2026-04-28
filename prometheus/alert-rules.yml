@@ -1,0 +1,67 @@
+# ─── Prometheus Alerting Rules ────────────────────────────────────────────────
+# These rules fire alerts when key thresholds are breached.
+# Works with both Docker Compose (local) and Kubernetes deployments.
+
+groups:
+  - name: schemind-backend-alerts
+    rules:
+
+      # ── High Error Rate ──────────────────────────────────────────────────────
+      - alert: HighErrorRate
+        expr: sum(rate(http_requests_total{status_code=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High HTTP error rate detected"
+          description: "More than 5% of requests are returning 5xx errors for the past 2 minutes."
+
+      # ── High Response Latency ────────────────────────────────────────────────
+      - alert: HighResponseLatency
+        expr: histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[5m]))) > 1
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High p95 response latency"
+          description: "95th percentile response time is above 1 second for the past 3 minutes."
+
+      # ── High Memory Usage ────────────────────────────────────────────────────
+      - alert: HighMemoryUsage
+        expr: process_resident_memory_bytes > 512 * 1024 * 1024
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Backend memory usage above 512MB"
+          description: "Process RSS memory has exceeded 512MB for 5 minutes. Consider scaling or investigating leaks."
+
+      # ── High Event Loop Lag ──────────────────────────────────────────────────
+      - alert: HighEventLoopLag
+        expr: nodejs_eventloop_lag_seconds > 0.5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Node.js event loop lag is high"
+          description: "Event loop lag exceeds 500ms — the backend may be under CPU pressure."
+
+      # ── Backend Down ─────────────────────────────────────────────────────────
+      - alert: BackendDown
+        expr: up{job="schemind-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Schemind backend is unreachable"
+          description: "Prometheus cannot scrape the backend /metrics endpoint. The service may be down."
+
+      # ── Too Many Active Connections ──────────────────────────────────────────
+      - alert: TooManyActiveConnections
+        expr: active_connections > 100
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High number of active connections"
+          description: "Active connections exceed 100 for over 3 minutes. Check for connection leaks or traffic spikes."

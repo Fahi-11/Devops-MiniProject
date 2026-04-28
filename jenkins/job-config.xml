@@ -1,28 +1,101 @@
 <?xml version='1.1' encoding='UTF-8'?>
 <flow-definition plugin="workflow-job">
   <actions/>
-  <description>Schemind CI/CD Pipeline - Builds Docker images, pushes to Docker Hub, deploys to Kubernetes, and sets up Prometheus monitoring.</description>
+  <description>Schemind CI/CD Pipeline - Builds Docker images and pushes to Docker Hub</description>
   <keepDependencies>false</keepDependencies>
   <properties/>
-  <definition class="org.jenkinsci.plugins.workflow.cps.CpsScmFlowDefinition" plugin="workflow-cps">
-    <scm class="hudson.plugins.git.GitSCM" plugin="git">
-      <configVersion>2</configVersion>
-      <userRemoteConfigs>
-        <hudson.plugins.git.UserRemoteConfig>
-          <url>https://github.com/PrajitPranav/Devops-MiniProject.git</url>
-        </hudson.plugins.git.UserRemoteConfig>
-      </userRemoteConfigs>
-      <branches>
-        <hudson.plugins.git.BranchSpec>
-          <name>*/main</name>
-        </hudson.plugins.git.BranchSpec>
-      </branches>
-      <doGenerateSubmoduleConfigurations>false</doGenerateSubmoduleConfigurations>
-      <submoduleCfg class="empty-list"/>
-      <extensions/>
-    </scm>
-    <scriptPath>Jenkinsfile</scriptPath>
-    <lightweight>true</lightweight>
+  <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps">
+    <script>
+pipeline {
+    agent any
+
+    environment {
+        DOCKERHUB_USER  = 'faheem313'
+        FRONTEND_IMAGE  = "${DOCKERHUB_USER}/schemind-frontend"
+        BACKEND_IMAGE   = "${DOCKERHUB_USER}/schemind-backend"
+        IMAGE_TAG       = "build-${BUILD_NUMBER}"
+    }
+
+    stages {
+
+        stage('Clone Repository') {
+            steps {
+                echo '📥 Cloning repository...'
+                git branch: 'main', url: 'https://github.com/PrajitPranav/Devops-MiniProject.git'
+            }
+        }
+
+        stage('Test Backend') {
+            steps {
+                echo '🧪 Verifying backend files...'
+                sh 'ls -la backend/server.js backend/package.json backend/Dockerfile'
+                echo '✅ Backend files verified'
+            }
+        }
+
+        stage('Build Backend Docker Image') {
+            steps {
+                echo '🔨 Building Backend Docker image...'
+                sh "docker build -t ${BACKEND_IMAGE}:${IMAGE_TAG} -t ${BACKEND_IMAGE}:latest -f backend/Dockerfile ./backend"
+            }
+        }
+
+        stage('Build Frontend Docker Image') {
+            steps {
+                echo '🔨 Building Frontend Docker image...'
+                sh """
+                    docker build \
+                        --build-arg VITE_API_URL=http://localhost:30081 \
+                        -t ${FRONTEND_IMAGE}:${IMAGE_TAG} \
+                        -t ${FRONTEND_IMAGE}:latest \
+                        -f Dockerfile.frontend .
+                """
+            }
+        }
+
+        stage('Docker Login &amp; Push') {
+            steps {
+                echo '🔐 Logging in and pushing to Docker Hub...'
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-credentials',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
+                    sh "docker push ${BACKEND_IMAGE}:${IMAGE_TAG}"
+                    sh "docker push ${BACKEND_IMAGE}:latest"
+                    sh "docker push ${FRONTEND_IMAGE}:${IMAGE_TAG}"
+                    sh "docker push ${FRONTEND_IMAGE}:latest"
+                }
+            }
+        }
+
+        stage('Cleanup Local Images') {
+            steps {
+                echo '🧹 Cleaning up local Docker images...'
+                sh "docker rmi ${FRONTEND_IMAGE}:${IMAGE_TAG} || true"
+                sh "docker rmi ${BACKEND_IMAGE}:${IMAGE_TAG}  || true"
+            }
+        }
+
+    }
+
+    post {
+        success {
+            echo '✅ Pipeline completed successfully!'
+            echo "📦 Frontend: https://hub.docker.com/r/${FRONTEND_IMAGE}"
+            echo "📦 Backend:  https://hub.docker.com/r/${BACKEND_IMAGE}"
+        }
+        failure {
+            echo '❌ Pipeline failed. Check the logs above.'
+        }
+        always {
+            sh 'docker logout || true'
+        }
+    }
+}
+    </script>
+    <sandbox>true</sandbox>
   </definition>
   <triggers/>
   <disabled>false</disabled>
