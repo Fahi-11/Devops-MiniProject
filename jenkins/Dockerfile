@@ -5,6 +5,8 @@ USER root
 # Install Docker CLI
 RUN apt-get update && \
     apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release sudo && \
+    curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
+    apt-get install -y nodejs && \
     install -m 0755 -d /etc/apt/keyrings && \
     curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc && \
     chmod a+r /etc/apt/keyrings/docker.asc && \
