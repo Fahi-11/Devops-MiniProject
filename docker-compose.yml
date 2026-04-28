@@ -1,0 +1,83 @@
+# ─── Local Development Stack ─────────────────────────────────────────────────
+# Run everything locally with: docker compose up --build
+# Access:
+#   Frontend   → http://localhost:8080
+#   Backend    → http://localhost:5001
+#   Prometheus → http://localhost:9090
+#   Grafana    → http://localhost:3000  (admin / admin123)
+
+services:
+
+  # ── MongoDB ───────────────────────────────────────────────────────────────
+  mongo:
+    image: mongo:7
+    container_name: schemind-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+  # ── Backend (Express API) ─────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: schemind-backend
+    restart: unless-stopped
+    ports:
+      - "5001:5001"
+    environment:
+      - PORT=5001
+      - NODE_ENV=development
+      - MONGO_URI=mongodb://mongo:27017/schemind
+      - JWT_SECRET=local_dev_secret_change_me
+      - FRONTEND_URL=http://localhost:8080
+    depends_on:
+      - mongo
+
+  # ── Frontend (Vite + Nginx) ───────────────────────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        VITE_API_URL: http://localhost:5001
+    container_name: schemind-frontend
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+
+  # ── Prometheus ────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: schemind-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus-local.yml:/etc/prometheus/prometheus.yml
+    depends_on:
+      - backend
+
+  # ── Grafana ───────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: schemind-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
+volumes:
+  mongo-data:
+  grafana-data:

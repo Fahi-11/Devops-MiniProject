@@ -4,6 +4,7 @@ import cors from 'cors';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
+import client from 'prom-client';
 
 dotenv.config();
 
@@ -11,6 +12,46 @@ const app = express();
 const PORT = process.env.PORT || 5001;
 const MONGO_URI = process.env.MONGO_URI;
 const JWT_SECRET = process.env.JWT_SECRET || 'schemind_default_secret';
+
+// ─── Prometheus Metrics ────────────────────────────────────────────────────────
+// Collect default Node.js metrics (CPU, memory, event loop lag, etc.)
+const register = new client.Registry();
+client.collectDefaultMetrics({ register });
+
+// Custom counters
+const httpRequestsTotal = new client.Counter({
+  name: 'http_requests_total',
+  help: 'Total number of HTTP requests',
+  labelNames: ['method', 'route', 'status_code'],
+  registers: [register],
+});
+
+const httpRequestDuration = new client.Histogram({
+  name: 'http_request_duration_seconds',
+  help: 'HTTP request duration in seconds',
+  labelNames: ['method', 'route', 'status_code'],
+  buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5],
+  registers: [register],
+});
+
+const activeConnections = new client.Gauge({
+  name: 'active_connections',
+  help: 'Number of active HTTP connections',
+  registers: [register],
+});
+
+// Middleware to track request metrics
+app.use((req, res, next) => {
+  const end = httpRequestDuration.startTimer();
+  activeConnections.inc();
+  res.on('finish', () => {
+    activeConnections.dec();
+    const route = req.route ? req.route.path : req.path;
+    httpRequestsTotal.inc({ method: req.method, route, status_code: res.statusCode });
+    end({ method: req.method, route, status_code: res.statusCode });
+  });
+  next();
+});
 
 // ─── Middleware ────────────────────────────────────────────────────────────────
 app.use(express.json());
@@ -23,7 +64,6 @@ const ALLOWED_ORIGINS = [
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (curl, Postman, k8s probes)
     if (!origin) return callback(null, true);
     if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
     return callback(new Error(`CORS blocked: ${origin}`));
@@ -60,7 +100,7 @@ const User = mongoose.model('User', UserSchema);
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
-// Root health-check route
+// Root
 app.get('/', (req, res) => {
   res.send('Schemind Backend Running Successfully 🚀');
 });
@@ -68,6 +108,12 @@ app.get('/', (req, res) => {
 // Health check endpoint (used by K8s liveness/readiness probes)
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Schemind API is healthy 🟢' });
+});
+
+// Prometheus metrics endpoint — scraped by Prometheus every 15s
+app.get('/metrics', async (req, res) => {
+  res.set('Content-Type', register.contentType);
+  res.end(await register.metrics());
 });
 
 // Signup Route
@@ -131,5 +177,4 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // ─── Start Server ─────────────────────────────────────────────────────────────
-// Bind to 0.0.0.0 so the server is reachable inside Docker/Kubernetes containers
-app.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server running on http://0.0.0.0:${PORT}`));
+app.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server running on http://0.0.0.0:${PORT}`));

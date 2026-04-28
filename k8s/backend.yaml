@@ -14,10 +14,14 @@ spec:
     metadata:
       labels:
         app: schemind-backend
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "5001"
+        prometheus.io/path: "/metrics"
     spec:
       containers:
         - name: schemind-backend
-          image: prajitpranavk/schemind-backend:latest
+          image: faheem313/schemind-backend:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 5001

@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: schemind-frontend
-          image: prajitpranavk/schemind-frontend:latest
+          image: faheem313/schemind-frontend:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 80

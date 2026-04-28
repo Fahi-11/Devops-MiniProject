@@ -1,0 +1,23 @@
+# ─── Jenkins CI/CD Server ─────────────────────────────────────────────────────
+# Start:  docker compose -f jenkins/docker-compose.jenkins.yml up --build -d
+# Access: http://localhost:8082
+# No setup wizard — plugins are pre-installed
+
+services:
+  jenkins:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: schemind-jenkins
+    restart: unless-stopped
+    ports:
+      - "8082:8080"     # Jenkins UI
+      - "50000:50000"   # Agent connections
+    volumes:
+      - jenkins-data:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock   # Access host Docker daemon
+    environment:
+      - DOCKER_HOST=unix:///var/run/docker.sock
+
+volumes:
+  jenkins-data:
